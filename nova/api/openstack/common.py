@@ -457,14 +457,17 @@ class ViewBuilder(object):
         """Return href string with proper limit and marker params."""
         params = request.params.copy()
         params["marker"] = identifier
-        url = os.path.join(request.application_url,
+        prefix = FLAGS.osapi_link_prefix or request.application_url
+        url = os.path.join(prefix,
                            request.environ["nova.context"].project_id,
                            self._collection_name)
         return "%s?%s" % (url, dict_to_query_str(params))
 
     def _get_href_link(self, request, identifier):
         """Return an href string pointing to this object."""
-        return os.path.join(request.application_url,
+        prefix = self._update_link_prefix(request.application_url,
+                                          FLAGS.osapi_link_prefix)
+        return os.path.join(prefix,
                             request.environ["nova.context"].project_id,
                             self._collection_name,
                             str(identifier))
@@ -472,6 +475,7 @@ class ViewBuilder(object):
     def _get_bookmark_link(self, request, identifier):
         """Create a URL that refers to a specific resource."""
         base_url = remove_version_from_href(request.application_url)
+        base_url = self._update_link_prefix(base_url, FLAGS.osapi_link_prefix)
         return os.path.join(base_url,
                             request.environ["nova.context"].project_id,
                             self._collection_name,
@@ -492,3 +496,12 @@ class ViewBuilder(object):
                 "href": self._get_next_link(request, last_item_id),
             })
         return links
+
+    def _update_link_prefix(self, orig_url, prefix):
+        if not prefix:
+             return orig_url
+        url_parts = list(urlparse.urlsplit(orig_url))
+        prefix_parts = list(urlparse.urlsplit(prefix))
+        url_parts[1] = prefix_parts[1]
+        return urlparse.urlunsplit(url_parts)
+
