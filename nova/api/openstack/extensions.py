@@ -304,6 +304,8 @@ def wrap_errors(fn):
     def wrapped(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
+        except webob.exc.HTTPException:
+            raise
         except Exception, e:
             raise webob.exc.HTTPInternalServerError()
     return wrapped
