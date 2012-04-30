@@ -104,6 +104,11 @@ libvirt_opts = [
     cfg.BoolOpt('libvirt_inject_key',
                 default=True,
                 help='Inject the ssh public key at boot time'),
+    cfg.IntOpt('libvirt_inject_partition',
+                default=1,
+                help='The partition to inject to : '
+                     '-1 => inspect (libguestfs only), 0 => not partitioned, '
+                     '>0 => partition number'),
     cfg.BoolOpt('use_usb_tablet',
                 default=True,
                 help='Sync virtual and real mouse cursors in Windows VMs'),
@@ -1262,12 +1267,11 @@ class LibvirtConnection(driver.ComputeDriver):
                               cow=FLAGS.use_cow_images,
                               swap_mb=swap_mb)
 
-        # For now, we assume that if we're not using a kernel, we're using a
-        # partitioned disk image where the target partition is the first
-        # partition
         target_partition = None
         if not instance['kernel_id']:
-            target_partition = "1"
+            target_partition = FLAGS.libvirt_inject_partition
+            if target_partition == 0:
+                target_partition = None
 
         config_drive, config_drive_id = self._get_config_drive_info(instance)
 
@@ -2110,8 +2114,6 @@ class LibvirtConnection(driver.ComputeDriver):
 
         if ret <= 0:
             raise exception.InvalidCPUInfo(reason=m % locals())
-
-        return
 
     def ensure_filtering_rules_for_instance(self, instance_ref, network_info,
                                             time=None):
