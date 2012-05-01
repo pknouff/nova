@@ -23,10 +23,15 @@ import sys
 from nova.db.sqlalchemy.session import get_engine
 from nova import exception
 from nova import flags
+from nova import log as logging
+
 
 import sqlalchemy
 import migrate
 from migrate.versioning import util as migrate_util
+
+
+LOG = logging.getLogger(__name__)
 
 
 @migrate_util.decorator
@@ -52,18 +57,9 @@ if (not hasattr(migrate, '__version__') or
 
 
 # NOTE(jkoelker) Delay importing migrate until we are patched
+from migrate import exceptions as versioning_exceptions
 from migrate.versioning import api as versioning_api
 from migrate.versioning.repository import Repository
-
-try:
-    from migrate.versioning import exceptions as versioning_exceptions
-except ImportError:
-    try:
-        # python-migration changed location of exceptions after 1.6.3
-        # See LP Bug #717467
-        from migrate import exceptions as versioning_exceptions
-    except ImportError:
-        sys.exit(_("python-migrate is not installed. Exiting."))
 
 FLAGS = flags.FLAGS
 

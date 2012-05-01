@@ -41,6 +41,7 @@ from nova import flags
 from nova.image import s3
 from nova import log as logging
 from nova import network
+from nova.openstack.common import importutils
 from nova import quota
 from nova import utils
 from nova import volume
@@ -211,7 +212,7 @@ class CloudController(object):
         self.volume_api = volume.API()
         self.compute_api = compute.API(network_api=self.network_api,
                                        volume_api=self.volume_api)
-        self.sgh = utils.import_object(FLAGS.security_group_handler)
+        self.sgh = importutils.import_object(FLAGS.security_group_handler)
 
     def __str__(self):
         return 'CloudController'
@@ -998,7 +999,7 @@ class CloudController(object):
         def _format_attr_block_device_mapping(instance, result):
             tmp = {}
             self._format_instance_root_device_name(instance, tmp)
-            self._format_instance_bdm(context, instance_id,
+            self._format_instance_bdm(context, instance['uuid'],
                                       tmp['rootDeviceName'], result)
 
         def _format_attr_disable_api_termination(instance, result):
@@ -1098,13 +1099,13 @@ class CloudController(object):
             instances_set.append(i)
         return {'instancesSet': instances_set}
 
-    def _format_instance_bdm(self, context, instance_id, root_device_name,
+    def _format_instance_bdm(self, context, instance_uuid, root_device_name,
                              result):
         """Format InstanceBlockDeviceMappingResponseItemType"""
         root_device_type = 'instance-store'
         mapping = []
         for bdm in db.block_device_mapping_get_all_by_instance(context,
-                                                               instance_id):
+                                                               instance_uuid):
             volume_id = bdm['volume_id']
             if (volume_id is None or bdm['no_device']):
                 continue
@@ -1220,7 +1221,7 @@ class CloudController(object):
             i['launchTime'] = instance['created_at']
             i['amiLaunchIndex'] = instance['launch_index']
             self._format_instance_root_device_name(instance, i)
-            self._format_instance_bdm(context, instance_id,
+            self._format_instance_bdm(context, instance['uuid'],
                                       i['rootDeviceName'], i)
             host = instance['host']
             services = db.service_get_all_by_host(context.elevated(), host)

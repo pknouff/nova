@@ -36,13 +36,13 @@ from nova import db
 from nova import exception
 from nova import flags
 from nova import log as logging
+from nova.openstack.common import importutils
 from nova import test
 from nova.tests.db import fakes as db_fakes
 from nova.tests.xenapi import stubs
 from nova.tests.glance import stubs as glance_stubs
 from nova.tests import fake_network
 from nova.tests import fake_utils
-from nova import utils
 from nova.virt.xenapi import connection as xenapi_conn
 from nova.virt.xenapi import fake as xenapi_fake
 from nova.virt.xenapi import volume_utils
@@ -215,7 +215,7 @@ class XenAPIVMTestCase(test.TestCase):
     """Unit tests for VM operations."""
     def setUp(self):
         super(XenAPIVMTestCase, self).setUp()
-        self.network = utils.import_object(FLAGS.network_manager)
+        self.network = importutils.import_object(FLAGS.network_manager)
         self.flags(xenapi_connection_url='test_url',
                    xenapi_connection_password='test_pass',
                    instance_name_template='%d',
@@ -1485,7 +1485,13 @@ class XenAPIBWUsageTestCase(test.TestCase):
         """Test that get_all_bw_usage returns an empty list when metrics
         compilation failed.  c.f. bug #910045.
         """
-        result = self.conn.get_all_bw_usage(datetime.datetime.utcnow())
+        class testinstance(object):
+            def __init__(self):
+                self.name = "instance-0001"
+                self.uuid = "1-2-3-4-5"
+
+        result = self.conn.get_all_bw_usage([testinstance()],
+                datetime.datetime.utcnow())
         self.assertEqual(result, [])
 
 
@@ -1546,7 +1552,7 @@ class XenAPIDom0IptablesFirewallTestCase(test.TestCase):
         stubs.stubout_session(self.stubs, stubs.FakeSessionForFirewallTests,
                               test_case=self)
         self.context = context.RequestContext(self.user_id, self.project_id)
-        self.network = utils.import_object(FLAGS.network_manager)
+        self.network = importutils.import_object(FLAGS.network_manager)
         self.conn = xenapi_conn.get_connection(False)
         self.fw = self.conn._vmops.firewall_driver
 

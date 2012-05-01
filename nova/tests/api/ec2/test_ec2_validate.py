@@ -30,9 +30,9 @@ from nova import exception
 from nova import flags
 from nova.image import fake
 from nova import log as logging
+from nova.openstack.common import importutils
 from nova import rpc
 from nova import test
-from nova import utils
 
 LOG = logging.getLogger('nova.tests.ec2_validate')
 FLAGS = flags.FLAGS
@@ -56,7 +56,7 @@ class EC2ValidateTestCase(test.TestCase):
         self.scheduter = self.start_service('scheduler')
         self.network = self.start_service('network')
         self.volume = self.start_service('volume')
-        self.image_service = utils.import_object(FLAGS.image_service)
+        self.image_service = importutils.import_object(FLAGS.image_service)
 
         self.user_id = 'fake'
         self.project_id = 'fake'
@@ -124,7 +124,7 @@ class EC2ValidateTestCase(test.TestCase):
                               instance_id='i-1234',
                               device='/dev/vdc')
 
-    def test_describe_instance_ttribute(self):
+    def test_describe_instance_attribute(self):
         for ec2_id, e in self.ec2_id_exception_map:
             self.assertRaises(e,
                               self.cloud.describe_instance_attribute,
