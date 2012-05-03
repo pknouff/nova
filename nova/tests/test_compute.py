@@ -1787,6 +1787,110 @@ class ComputeTestCase(BaseTestCase):
         self.assertEqual(call_info['get_by_uuid'], 3)
         self.assertEqual(call_info['get_nw_info'], 4)
 
+    def test_instance_build_timeout_disabled(self):
+        self.flags(instance_build_timeout=0)
+        ctxt = context.get_admin_context()
+        called = {'get_all': False, 'set_error_state': 0}
+        created_at = utils.utcnow() + datetime.timedelta(seconds=-60)
+
+        def fake_instance_get_all_by_filters(*args, **kwargs):
+            called['get_all'] = True
+            return instances[:]
+
+        self.stubs.Set(db, 'instance_get_all_by_filters',
+                fake_instance_get_all_by_filters)
+
+        def fake_set_instance_error_state(_ctxt, instance_uuid, **kwargs):
+            called['set_error_state'] += 1
+
+        self.stubs.Set(self.compute, '_set_instance_error_state',
+                fake_set_instance_error_state)
+
+        instance_map = {}
+        instances = []
+        for x in xrange(5):
+            uuid = 'fake-uuid-%s' % x
+            instance_map[uuid] = {'uuid': uuid, 'host': FLAGS.host,
+                    'vm_state': vm_states.BUILDING,
+                    'created_at': created_at}
+            instances.append(instance_map[uuid])
+
+        self.compute._check_instance_build_time(ctxt)
+        self.assertFalse(called['get_all'])
+        self.assertEqual(called['set_error_state'], 0)
+
+    def test_instance_build_timeout(self):
+        self.flags(instance_build_timeout=30)
+        ctxt = context.get_admin_context()
+        called = {'get_all': False, 'set_error_state': 0}
+        created_at = utils.utcnow() + datetime.timedelta(seconds=-60)
+
+        def fake_instance_get_all_by_filters(*args, **kwargs):
+            called['get_all'] = True
+            return instances[:]
+
+        self.stubs.Set(db, 'instance_get_all_by_filters',
+                fake_instance_get_all_by_filters)
+
+        def fake_set_instance_error_state(_ctxt, instance_uuid, **kwargs):
+            called['set_error_state'] += 1
+
+        self.stubs.Set(self.compute, '_set_instance_error_state',
+                fake_set_instance_error_state)
+
+        instance_map = {}
+        instances = []
+        for x in xrange(5):
+            uuid = 'fake-uuid-%s' % x
+            instance_map[uuid] = {'uuid': uuid, 'host': FLAGS.host,
+                    'vm_state': vm_states.BUILDING,
+                    'created_at': created_at}
+            instances.append(instance_map[uuid])
+
+        self.compute._check_instance_build_time(ctxt)
+        self.assertTrue(called['get_all'])
+        self.assertEqual(called['set_error_state'], 5)
+
+    def test_instance_build_timeout_mixed_instances(self):
+        self.flags(instance_build_timeout=30)
+        ctxt = context.get_admin_context()
+        called = {'get_all': False, 'set_error_state': 0}
+        created_at = utils.utcnow() + datetime.timedelta(seconds=-60)
+
+        def fake_instance_get_all_by_filters(*args, **kwargs):
+            called['get_all'] = True
+            return instances[:]
+
+        self.stubs.Set(db, 'instance_get_all_by_filters',
+                fake_instance_get_all_by_filters)
+
+        def fake_set_instance_error_state(_ctxt, instance_uuid, **kwargs):
+            called['set_error_state'] += 1
+
+        self.stubs.Set(self.compute, '_set_instance_error_state',
+                fake_set_instance_error_state)
+
+        instance_map = {}
+        instances = []
+        #expired instances
+        for x in xrange(4):
+            uuid = 'fake-uuid-%s' % x
+            instance_map[uuid] = {'uuid': uuid, 'host': FLAGS.host,
+                    'vm_state': vm_states.BUILDING,
+                    'created_at': created_at}
+            instances.append(instance_map[uuid])
+
+        #not expired
+        uuid = 'fake-uuid-5'
+        instance_map[uuid] = {'uuid': uuid, 'host': FLAGS.host,
+                'vm_state': vm_states.BUILDING,
+                'created_at': utils.utcnow()}
+        instances.append(instance_map[uuid])
+
+        self.compute._check_instance_build_time(ctxt)
+        self.assertTrue(called['get_all'])
+        self.assertEqual(called['set_error_state'], 4)
+
 
 class ComputeAPITestCase(BaseTestCase):
 
