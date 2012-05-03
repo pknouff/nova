@@ -62,6 +62,7 @@ from nova import network
 from nova.network import model as network_model
 from nova.notifier import api as notifier
 from nova.openstack.common import cfg
+from nova.openstack.common import excutils
 from nova.openstack.common import importutils
 from nova import rpc
 from nova import utils
@@ -187,7 +188,7 @@ def wrap_instance_fault(function):
         except exception.InstanceNotFound:
             raise
         except Exception, e:
-            with utils.save_and_reraise_exception():
+            with excutils.save_and_reraise_exception():
                 self.add_instance_fault_from_exc(context, instance_uuid, e,
                                                  sys.exc_info())
 
@@ -433,7 +434,7 @@ class ComputeManager(manager.SchedulerDependentManager):
                                        network_info, block_device_info,
                                        injected_files, admin_password)
             except Exception:
-                with utils.save_and_reraise_exception():
+                with excutils.save_and_reraise_exception():
                     self._deallocate_network(context, instance)
 
             if (is_first_time and not instance['access_ip_v4']
@@ -445,7 +446,7 @@ class ComputeManager(manager.SchedulerDependentManager):
         except exception.InstanceNotFound:
             LOG.warn(_("Instance not found."), instance_uuid=instance_uuid)
         except Exception as e:
-            with utils.save_and_reraise_exception():
+            with excutils.save_and_reraise_exception():
                 self._set_instance_error_state(context, instance_uuid)
 
     def _update_access_ip(self, context, instance, nw_info):
@@ -1327,6 +1328,9 @@ class ComputeManager(manager.SchedulerDependentManager):
                                  migration_id,
                                  {'status': 'migrating'})
 
+        self._instance_update(context, instance_uuid,
+                              task_state=task_states.RESIZE_MIGRATING)
+
         self._notify_about_instance_usage(
             context, instance_ref, "resize.start", network_info=network_info)
 
@@ -1335,7 +1339,7 @@ class ComputeManager(manager.SchedulerDependentManager):
                     context, instance_ref, migration_ref['dest_host'],
                     instance_type_ref, self._legacy_nw_info(network_info))
         except Exception, error:
-            with utils.save_and_reraise_exception():
+            with excutils.save_and_reraise_exception():
                 LOG.error(_('%s. Setting instance vm_state to ERROR') % error,
                           instance=instance_ref)
                 self._set_instance_error_state(context, instance_uuid)
@@ -1343,6 +1347,9 @@ class ComputeManager(manager.SchedulerDependentManager):
         self.db.migration_update(context,
                                  migration_id,
                                  {'status': 'post-migrating'})
+
+        self._instance_update(context, instance_uuid,
+                              task_state=task_states.RESIZE_MIGRATED)
 
         service = self.db.service_get_by_host_and_topic(
                 context, migration_ref['dest_compute'], FLAGS.compute_topic)
@@ -1382,6 +1389,9 @@ class ComputeManager(manager.SchedulerDependentManager):
                                                 migration_ref['dest_compute'])
 
         network_info = self._get_instance_nw_info(context, instance_ref)
+
+        self._instance_update(context, instance_ref.uuid,
+                              task_state=task_states.RESIZE_FINISH)
 
         self._notify_about_instance_usage(
             context, instance_ref, "finish_resize.start",
@@ -1425,7 +1435,7 @@ class ComputeManager(manager.SchedulerDependentManager):
             self._finish_resize(context, instance_ref, migration_ref,
                                 disk_info, image)
         except Exception, error:
-            with utils.save_and_reraise_exception():
+            with excutils.save_and_reraise_exception():
                 LOG.error(_('%s. Setting instance vm_state to ERROR') % error,
                           instance=instance_ref)
                 self._set_instance_error_state(context, instance_ref.uuid)
@@ -1719,7 +1729,7 @@ class ComputeManager(manager.SchedulerDependentManager):
                                                                     volume,
                                                                     connector)
         except Exception:  # pylint: disable=W0702
-            with utils.save_and_reraise_exception():
+            with excutils.save_and_reraise_exception():
                 msg = _("Failed to connect to volume %(volume_id)s "
                         "while attaching at %(mountpoint)s")
                 LOG.exception(msg % locals(), context=context,
@@ -1730,7 +1740,7 @@ class ComputeManager(manager.SchedulerDependentManager):
                                       instance_ref['name'],
                                       mountpoint)
         except Exception:  # pylint: disable=W0702
-            with utils.save_and_reraise_exception():
+            with excutils.save_and_reraise_exception():
                 msg = _("Failed to attach volume %(volume_id)s "
                         "at %(mountpoint)s")
                 LOG.exception(msg % locals(), context=context,
@@ -1975,7 +1985,7 @@ class ComputeManager(manager.SchedulerDependentManager):
                                'disk': disk}})
 
         except Exception:
-            with utils.save_and_reraise_exception():
+            with excutils.save_and_reraise_exception():
                 instance_uuid = instance_ref['uuid']
                 LOG.exception(_('Pre live migration failed at  %(dest)s'),
                               locals(), instance=instance_ref)
@@ -2506,7 +2516,7 @@ class ComputeManager(manager.SchedulerDependentManager):
         try:
             yield
         except Exception, error:
-            with utils.save_and_reraise_exception():
+            with excutils.save_and_reraise_exception():
                 msg = _('%s. Setting instance vm_state to ERROR')
                 LOG.error(msg % error, instance_uuid=instance_uuid)
                 self._set_instance_error_state(context, instance_uuid)
@@ -2518,7 +2528,7 @@ class ComputeManager(manager.SchedulerDependentManager):
         try:
             self.driver.add_to_aggregate(context, aggregate, host, **kwargs)
         except exception.AggregateError:
-            with utils.save_and_reraise_exception():
+            with excutils.save_and_reraise_exception():
                 self._undo_aggregate_operation(context,
                                                self.db.aggregate_host_delete,
                                                aggregate.id, host)
@@ -2532,7 +2542,7 @@ class ComputeManager(manager.SchedulerDependentManager):
                                               aggregate, host, **kwargs)
         except (exception.AggregateError,
                 exception.InvalidAggregateAction) as e:
-            with utils.save_and_reraise_exception():
+            with excutils.save_and_reraise_exception():
                 self._undo_aggregate_operation(
                                     context, self.db.aggregate_host_add,
                                     aggregate.id, host,
